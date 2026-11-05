@@ -1,0 +1,11 @@
+[Unit]
+Description=sourceshelf fetch run
+
+[Service]
+Type=oneshot
+Environment=KB_ROOT=%h/library
+EnvironmentFile=-%h/.config/sourceshelf/env
+WorkingDirectory=%h/library
+ExecStart=/usr/bin/env sourceshelf run
+SuccessExitStatus=75
+TimeoutStartSec=3h

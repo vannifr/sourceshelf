@@ -1,0 +1,9 @@
+[Unit]
+Description=sourceshelf fetch run, twice a week
+
+[Timer]
+OnCalendar=Tue,Fri 12:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

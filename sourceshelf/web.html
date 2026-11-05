@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge base</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mute:#666;--border:#ddd;--acc:#0b57d0;--card:#f7f7f8;--source:#e8f0fe;--error:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#e8e8e8;--mute:#9a9a9a;--border:#333;--acc:#8ab4f8;--card:#202020;--source:#1c2b45;--error:#f2b8b5}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:0 0 12px}h2{font-size:1.1rem;margin:28px 0 8px}
+form{display:flex;gap:8px}
+input[type=search]{flex:1;padding:10px;font-size:1rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg)}
+button{padding:10px 16px;font-size:1rem;border:0;border-radius:6px;background:var(--acc);color:var(--bg);cursor:pointer}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin:10px 0}
+.source{background:var(--source);border-radius:6px;padding:6px 10px;margin:8px 0;font-size:.9rem;overflow-wrap:anywhere}
+.source b{display:inline-block;min-width:5.5em}
+.title{font-weight:600;font-size:1.05rem}
+.mute{color:var(--mute);font-size:.9rem}
+.snippet{font-family:ui-monospace,monospace;font-size:.85rem;color:var(--mute);margin-top:6px;overflow-wrap:anywhere}
+.error{color:var(--error)}
+a{color:var(--acc)}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<main>
+<h1>Knowledge base <span class="mute">(read-only)</span></h1>
+
+<form id="f"><input type="search" id="q" placeholder="Search all sources…" autofocus><button>Search</button></form>
+<div class="mute"><label><input type="checkbox" id="fields"> include summary</label> <select id="kind"><option value="">all sources</option><option value="external">external only</option><option value="own">own work only</option></select></div>
+<div id="res" role="status" aria-live="polite"></div>
+
+<h2>Sources</h2>
+<div id="summary" class="mute"></div>
+<div id="configured"></div>
+
+<h2>Library per domain</h2>
+<table id="domains"></table>
+</main>
+<script>
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in (props || {})) k === "class" ? (e.className = props[k]) : e.setAttribute(k, props[k]);
+  for (const kid of kids) e.append(kid);
+  return e;
+}
+function link(url, text) { return url ? el("a", {href: url, target: "_blank", rel: "noopener noreferrer"}, text || url) : el("span", {class: "mute"}, "no URL"); }
+function row(label, ...content) { const d = el("div"); d.append(el("b", {}, label), ...content); return d; }
+
+async function load(path) {
+  const r = await fetch(path);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+
+function show(t) {
+  const place = t.page ? "p. " + t.page : (t.line ? "l. " + t.line : "");
+  const source = el("div", {class: "source"},
+    row("Source:", link(t.url)),
+    row("Domain:", t.domain || "local"),
+    row("Fiche:", t.fiche),
+    row("Text:", t.path + (place ? " · " + place : "")),
+    row("Origin:", [t.origin, t.status && "status " + t.status, t.verification && "verification " + t.verification, t.fetched && "fetched " + t.fetched].filter(Boolean).join(" · ")));
+  const who = [t.authors, t.year].filter(Boolean).join(" · ");
+  const k = el("div", {class: "card"}, el("div", {class: "title"}, t.title), el("div", {class: "mute"}, (who ? who + " · " : "") + "score " + t.score), source);
+  if (t.snippet) k.append(el("div", {class: "snippet"}, t.snippet));
+  return k;
+}
+
+document.getElementById("f").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const q = document.getElementById("q").value.trim();
+  const res = document.getElementById("res");
+  res.replaceChildren();
+  if (!q) return;
+  try {
+    const d = await load("/api/search?q=" + encodeURIComponent(q) + (document.getElementById("fields").checked ? "&fields=1" : "") + "&kind=" + document.getElementById("kind").value);
+    res.append(el("p", {class: "mute"}, d.results.length + " result(s) for “" + d.query + "”"));
+    d.results.forEach(t => res.append(show(t)));
+  } catch (e) { res.append(el("p", {class: "error"}, "Error: " + e.message)); }
+});
+
+(async () => {
+  try {
+    const d = await load("/api/sources");
+    document.getElementById("summary").textContent = d.fiche_count + " fiches" + (d.error_count ? ", of which " + d.error_count + " with an error" : "") + (d.unverified_count ? ", " + d.unverified_count + " machine summaries unverified" : "") + ", " + d.configured.length + " configured sources";
+    const g = document.getElementById("configured");
+    if (d.error) g.append(el("p", {class: "error"}, d.error));
+    d.configured.forEach(b => {
+      const k = el("div", {class: "card"}, el("div", {class: "title"}, b.id), el("div", {class: "mute"}, b.kind + " · every " + b.cadence_days + " days"));
+      if (b.query) k.append(row("Query:", b.query));
+      b.urls.forEach(u => k.append(row("URL:", link(u))));
+      k.append(row("Last ok:", b.last_ok || "not yet"));
+      if (b.error) k.append(el("div", {class: "error"}, "Error: " + b.error));
+      g.append(k);
+    });
+    const t = document.getElementById("domains");
+    d.domains.forEach(x => t.append(el("tr", {}, el("td", {}, x.domain), el("td", {}, String(x.count)))));
+  } catch (e) { document.getElementById("summary").append(el("span", {class: "error"}, "Error: " + e.message)); }
+})();
+</script>
+</body>
+</html>

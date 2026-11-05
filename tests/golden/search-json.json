@@ -1,0 +1,45 @@
+{
+  "quokka": [
+    {
+      "id": "url-aaa",
+      "title": "Mice",
+      "score": 0.6249,
+      "path": "data/text/url-aaa.txt",
+      "page": 2,
+      "line": 2,
+      "snippet": "page two about keyword quokka en quokka"
+    },
+    {
+      "id": "url-bbb",
+      "title": "Cats",
+      "score": 0.422,
+      "path": "data/text/url-bbb.txt",
+      "page": null,
+      "line": 2,
+      "snippet": "line two with quokka"
+    }
+  ],
+  "dogs": [
+    {
+      "id": "url-ccc",
+      "title": "Dogs",
+      "score": 1.5196,
+      "path": "data/text/url-ccc.txt",
+      "page": null,
+      "line": 1,
+      "snippet": "only dogs here"
+    }
+  ],
+  "rodents": [
+    {
+      "id": "url-aaa",
+      "title": "Mice",
+      "score": 0.9343,
+      "path": "data/text/url-aaa.txt",
+      "page": null,
+      "line": null,
+      "snippet": ""
+    }
+  ],
+  "nonexistent": []
+}

@@ -1,0 +1,17 @@
+sources:
+  - id: arxiv-example
+    kind: arxiv-query
+    query: 'all:"software testing"'
+    max: 10
+    cadence_days: 14
+  - id: example-pages
+    kind: url-list
+    urls:
+      - https://example.org/
+    cadence_days: 30
+  - id: example-feed
+    kind: feed
+    urls:
+      - https://example.org/feed.xml
+    max: 20
+    cadence_days: 14

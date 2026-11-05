@@ -1,0 +1,41 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not post secrets, personal data or confidential source text. Security problems: see SECURITY.md, not an issue.
+  - type: input
+    id: version
+    attributes:
+      label: Version and platform
+      description: Output of `python3 -m sourceshelf --version`, Python version, operating system
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command you ran
+      render: sh
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Full message and exit code. Remove private text first.
+    validations:
+      required: true
+  - type: checkboxes
+    id: tools
+    attributes:
+      label: System tools
+      options:
+        - label: "`pdftotext` and `rg` are installed (or not needed for this command)"

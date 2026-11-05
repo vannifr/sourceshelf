@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2501.00001v2</id>
+    <published>2025-01-02T10:00:00Z</published>
+    <title>Agentic   Software
+      Engineering in Practice</title>
+    <summary>We study agents.
+ Results follow.</summary>
+    <author><name>Ada Voorbeeld</name></author>
+    <author><name>Bob Test</name></author>
+    <arxiv:doi>10.1000/xyz123</arxiv:doi>
+  </entry>
+</feed>

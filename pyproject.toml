@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sourceshelf"
+version = "0.1.0"
+description = "Local source library: fetch, store, describe and search publications, sources and news"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.12"
+dependencies = ["pyyaml>=6,<7"]
+
+[project.optional-dependencies]
+audio = ["faster-whisper>=1,<2"]
+dev = ["ruff==0.16.*", "pytest==8.*", "pytest-cov==7.*"]
+
+[project.scripts]
+sourceshelf = "sourceshelf.cli:main"
+
+[tool.setuptools]
+packages = ["sourceshelf"]
+
+[tool.setuptools.package-data]
+sourceshelf = ["web.html"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S310", "S603", "S607"]
+"sourceshelf/fiche.py" = ["S506"]
+"sourceshelf/net.py" = ["S310"]
+"sourceshelf/describe.py" = ["S310"]
+"sourceshelf/add.py" = ["S314"]
+"sourceshelf/extract.py" = ["S314", "S603", "S607"]
+"sourceshelf/run.py" = ["S314", "S603"]
+"sourceshelf/search.py" = ["S603", "S607"]
+
+[tool.pytest.ini_options]
+addopts = "-p no:asyncio -p no:pytest_bdd -p no:anyio"
+pythonpath = ["."]
+testpaths = ["tests"]

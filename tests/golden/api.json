@@ -1,0 +1,78 @@
+{
+  "/api/search?q=else": {
+    "query": "else",
+    "results": [
+      {
+        "authors": null,
+        "domain": "",
+        "fetched": null,
+        "fiche": "fiches/url-bbb.md",
+        "id": "url-bbb",
+        "line": 1,
+        "origin": "migration",
+        "page": null,
+        "path": "data/text/url-bbb.txt",
+        "score": 0.73,
+        "snippet": "something else",
+        "status": "used",
+        "title": "Cats",
+        "url": "",
+        "verification": null,
+        "year": null
+      }
+    ]
+  },
+  "/api/search?q=quokka": {
+    "query": "quokka",
+    "results": [
+      {
+        "authors": "A. Author",
+        "domain": "example.org",
+        "fetched": null,
+        "fiche": "fiches/url-aaa.md",
+        "id": "url-aaa",
+        "line": 1,
+        "origin": "migration",
+        "page": null,
+        "path": "data/text/url-aaa.txt",
+        "score": 0.66,
+        "snippet": "line about quokka",
+        "status": "used",
+        "title": "Mice <b>x</b>",
+        "url": "https://example.org/muis",
+        "verification": null,
+        "year": 2024
+      }
+    ]
+  },
+  "/api/sources": {
+    "configured": [
+      {
+        "cadence_days": 7,
+        "error": null,
+        "id": "blog",
+        "kind": "feed",
+        "last_error": null,
+        "last_ok": null,
+        "query": "",
+        "urls": [
+          "https://example.org/feed.xml"
+        ]
+      }
+    ],
+    "domains": [
+      {
+        "count": 1,
+        "domain": "example.org"
+      },
+      {
+        "count": 1,
+        "domain": "local (no URL)"
+      }
+    ],
+    "error": null,
+    "error_count": 0,
+    "fiche_count": 2,
+    "unverified_count": 0
+  }
+}

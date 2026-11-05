@@ -1,0 +1,2 @@
+A tide table lists high and low water per station and day. Times are given in UTC; heights are metres above chart datum.
+Stations are identified by a four letter code.

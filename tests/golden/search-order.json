@@ -1,0 +1,19 @@
+{
+  "default": [
+    "url-bbb",
+    "local-eigen",
+    "url-aaa"
+  ],
+  "--fields": [
+    "url-bbb",
+    "local-eigen",
+    "url-aaa"
+  ],
+  "--kind external": [
+    "url-bbb",
+    "url-aaa"
+  ],
+  "--kind own": [
+    "local-eigen"
+  ]
+}
