@@ -22,9 +22,9 @@ You use it from a terminal (the `sourceshelf` command) or, read-only, in a brows
 
 ## Where the name comes from
 
-The project started as an internal tool called *kennisbank*, Dutch for "knowledge base". The public name is sourceshelf, and the only command is `sourceshelf` (also `python3 -m sourceshelf`). If you want a shorter name, add a shell alias.
+The name is a shelf of sources: the only command is `sourceshelf` (also `python3 -m sourceshelf`). If you want a shorter name, add a shell alias.
 
-What the old name does not mean: it is not a knowledge base in the AI or wiki sense. There is no knowledge graph, no ontology, no question answering and no generated knowledge. It is a shelf of source documents with index cards and text search; what you conclude from them stays with you.
+What it is not: a knowledge base in the AI or wiki sense. There is no knowledge graph, no ontology, no question answering and no generated knowledge. It is a shelf of source documents with index cards and text search; what you conclude from them stays with you.
 
 ## Install
 
