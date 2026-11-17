@@ -95,3 +95,15 @@ def test_index_contains_id_title_status_sha(tmp_path):
     data = json.loads((tmp_path / "index" / "index.json").read_text())
     assert data == [{"id": "arxiv-2501.00001", "title": "Example", "year": None, "kind": "preprint",
                      "status": "new", "sha256": "a" * 64}]
+
+
+def test_quality_values(tmp_path, capsys):
+    write(tmp_path / "fiches", "arxiv-2501.00001.md", VALID)
+    assert cli.main(["--root", str(tmp_path), "check"]) == 0
+    assert "1 fiches without `quality:` (arxiv-2501.00001)" in capsys.readouterr().out
+    write(tmp_path / "fiches", "arxiv-2501.00001.md", VALID.replace("kind: preprint", "kind: preprint\nquality: vendor"))
+    assert cli.main(["--root", str(tmp_path), "check"]) == 0
+    assert "quality" not in capsys.readouterr().out
+    write(tmp_path / "fiches", "arxiv-2501.00001.md", VALID.replace("kind: preprint", "kind: preprint\nquality: good"))
+    assert cli.main(["--root", str(tmp_path), "check"]) == 1
+    assert "invalid quality 'good'" in capsys.readouterr().out

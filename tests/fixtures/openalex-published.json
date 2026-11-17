@@ -1,0 +1,5 @@
+{"id": "https://openalex.org/W111", "doi": "https://doi.org/10.48550/arxiv.2501.00001", "title": "Sample Preprint Title",
+ "locations": [
+  {"doi": null, "source": {"type": "repository"}},
+  {"doi": "https://doi.org/10.1145/3600000.3600001", "source": {"type": "conference"}}
+ ]}

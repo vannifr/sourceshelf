@@ -1,0 +1,5 @@
+{"results": [
+ {"id": "https://openalex.org/W9", "title": "Other Paper", "locations": [{"doi": "https://doi.org/10.1/other", "source": {"type": "journal"}}]},
+ {"id": "https://openalex.org/W333", "title": "Unpublished title", "locations": [{"doi": null, "source": {"type": "repository"}}]},
+ {"id": "https://openalex.org/W222", "title": "Sample: Preprint title!", "locations": [{"doi": "https://doi.org/10.1000/journal.1", "source": {"type": "journal"}}]}
+]}

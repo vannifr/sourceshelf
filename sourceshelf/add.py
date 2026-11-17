@@ -111,7 +111,11 @@ def _store(root: Path, fid: str, resp, url: str, meta: dict) -> None:
         meta["title"] = urlsplit(url).path.rsplit("/", 1)[-1] or url
 
 
-def add_source(url: str, root: Path, net, date: str) -> Result:
+def default_quality(kind: str) -> str:
+    return kind if kind in ("peer-reviewed", "preprint", "blog") else "official" if kind == "standard" else "unknown"
+
+
+def add_source(url: str, root: Path, net, date: str, quality: str | None = None) -> Result:
     aid = arxiv_id(url)
     existing = _find_existing(root, url, None)
     if aid and not existing:
@@ -142,7 +146,8 @@ def add_source(url: str, root: Path, net, date: str) -> Result:
     }
     kind = "preprint" if aid else ("report" if meta.get("file", "").startswith("pdf/") else "other")
     fiche = {**base, **{k: v for k, v in meta.items() if k in ("authors", "year")}, "url": canonical,
-             "doi": meta.get("doi"), "kind": kind, "origin": "kb add", "fetched": date}
+             "doi": meta.get("doi"), "kind": kind, "quality": quality or default_quality(kind), "origin": "kb add",
+             "fetched": date}
     for k in ("file", "text", "text-layer", "sha256"):
         if k in meta:
             fiche[k] = meta[k]
@@ -166,7 +171,7 @@ def _add_file(path: Path, root: Path, date: str, content: bytes, digest: str, tr
     target = root / "data" / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(content)
-    meta = {"id": fid, "title": _title(path), "status": "new", "origin": "kb add (local)", "kind": "other",
+    meta = {"id": fid, "title": _title(path), "status": "new", "origin": "kb add (local)", "kind": "other", "quality": "unknown",
             "file": rel, "sha256": digest, "source-file": path.name, "fetched": date}
     error = None
     kind = "text" if ext in TEXT_EXT else "subtitle" if ext in SUBTITLE_EXT else "audio" if ext in AUDIO_EXT else "docx"

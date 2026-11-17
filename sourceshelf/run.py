@@ -10,8 +10,9 @@ from urllib.parse import quote_plus
 
 import yaml
 
+from sourceshelf import discover, spread
 from sourceshelf.add import _find_existing, add_source
-from sourceshelf.fiche import load_fiches, write_atomic
+from sourceshelf.fiche import QUALITIES, load_fiches, write_atomic
 from sourceshelf.ids import arxiv_id
 from sourceshelf.index import write_index
 from sourceshelf.lock import Busy, write_lock
@@ -43,6 +44,9 @@ class Source:
     query: str = ""
     urls: list = field(default_factory=list)
     max: int = 10
+    quality: str | None = None
+    series: str = ""
+    landing: str = ""
 
 
 @dataclass
@@ -57,12 +61,26 @@ class RunResult:
     changed: int = 0
 
 
-def load_sources(root: Path) -> list[Source]:
-    path = root / "sources.yaml"
+def _read_doc(root: Path) -> dict:
     try:
-        raw = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("sources", [])
+        doc = yaml.safe_load((root / "sources.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError) as error:
         raise SourcesError(f"sources.yaml unreadable: {error}") from error
+    if not isinstance(doc, dict):
+        raise SourcesError("sources.yaml is not a mapping")
+    return doc
+
+
+def load_discovery(root: Path) -> dict | None:
+    try:
+        return discover.parse_discovery(_read_doc(root).get("discovery"))
+    except discover.DiscoveryError as error:
+        raise SourcesError(str(error)) from error
+
+
+def load_sources(root: Path) -> list[Source]:
+    raw = _read_doc(root).get("sources", [])
+    load_discovery(root)
     sources = []
     for r in raw:
         if r.get("kind") not in KINDS or not r.get("id") or not r.get("cadence_days"):
@@ -71,8 +89,10 @@ def load_sources(root: Path) -> list[Source]:
             raise SourcesError(f"arxiv-query without query: {r['id']}")
         if r["kind"] in ("url-list", "feed") and not r.get("urls"):
             raise SourcesError(f"{r['kind']} without urls: {r['id']}")
+        if r.get("quality") is not None and r["quality"] not in QUALITIES:
+            raise SourcesError(f"invalid quality {r['quality']!r}: {r['id']}")
         sources.append(Source(r["id"], r["kind"], int(r["cadence_days"]), r.get("query", ""), r.get("urls", []),
-                            int(r.get("max", 10))))
+                            int(r.get("max", 10)), r.get("quality"), r.get("series", ""), r.get("landing", "")))
     return sources
 
 
@@ -235,7 +255,7 @@ def _process_source(root, net, source: Source, date: str, room: int, seen: dict 
         if len(new) >= room:
             remaining += 1
             continue
-        res = add_source(url, root, net, date)
+        res = add_source(url, root, net, date, source.quality)
         if res.new:
             new.append(res.id)
             if res.error:
@@ -243,7 +263,7 @@ def _process_source(root, net, source: Source, date: str, room: int, seen: dict 
     return new, failed, remaining, changed
 
 
-def _digest(root, now, result, new_ids, interrupted, state, sources, cap_reached, changed=()) -> str:
+def _digest(root, now, result, new_ids, interrupted, state, sources, cap_reached, changed=(), found=None) -> str:
     fiches = {str(f.meta["id"]): f for f in load_fiches(root / "fiches")}
     r = result
     lines = [f"# Digest {now.date()}", "",
@@ -270,6 +290,8 @@ def _digest(root, now, result, new_ids, interrupted, state, sources, cap_reached
         lines += ["## Failed sources", ""]
         lines += [f"- {b.id}: {state[b.id]['error']} (since {state[b.id].get('last_error', '?')[:10]})"
                    for b in error_sources] + [""]
+    lines += spread.render(spread.stats(fiches.values(), now))
+    lines += discover.render(found)
     lines += [f"## New ({len(new_ids)})", ""]
     for i in new_ids:
         m = fiches[i].meta if i in fiches else {}
@@ -359,7 +381,12 @@ def _run_locked(root, net, now, source_id, cap, commit) -> RunResult:
         s["last_run"] = now.isoformat(timespec="seconds")
         _save_state(root, state)
     r.index_errors = write_index(root)
-    digest = _digest(root, now, r, new_ids, interrupted, state, sources, r.remaining > 0, changed)
+    found = None
+    if not source_id:
+        found = discover.step(root, net, now, load_discovery(root), sources, load_fiches(root / "fiches"), state,
+                              lambda text: _write_line(root, now, text))
+        _save_state(root, state)
+    digest = _digest(root, now, r, new_ids, interrupted, state, sources, r.remaining > 0, changed, found)
     (root / "digest").mkdir(exist_ok=True)
     write_atomic(root / "digest" / "LATEST.md", digest)
     for crash in (root / "digest").glob("FOUT*.md"):

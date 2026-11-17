@@ -40,6 +40,11 @@ class FakeNet:
         return answer
 
 
+@pytest.fixture(autouse=True)
+def _no_openalex_key(monkeypatch):
+    monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+
+
 @pytest.fixture
 def arxiv_xml():
     return (FIXTURES / "arxiv-2501.00001.xml").read_bytes()

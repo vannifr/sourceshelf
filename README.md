@@ -50,6 +50,7 @@ sourceshelf search --exact "carbon and nitrogen"  # literal search through rg
 sourceshelf get <id>                              # show a fiche
 sourceshelf check                                 # validate fiches, index freshness and file hashes
 sourceshelf run                                   # fetch what is due from sources.yaml
+sourceshelf update --dry-run                      # new editions, preprint DOIs, dead links
 sourceshelf serve                                 # read-only web UI on 127.0.0.1:8765
 ```
 

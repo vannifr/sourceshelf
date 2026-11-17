@@ -78,8 +78,8 @@ class Net:
         self.robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
         self.last: dict[str, float] = {}
 
-    def _fetch(self, url: str) -> Response:
-        req = Request(url, headers={"User-Agent": USER_AGENT})
+    def _fetch(self, url: str, method: str = "GET") -> Response:
+        req = Request(url, headers={"User-Agent": USER_AGENT}, method=method)
         try:
             with self.opener(req, timeout=60) as r:
                 content = r.read(MAX_BYTES + 1)
@@ -115,9 +115,15 @@ class Net:
         rp = self.robots[base]
         return rp is None or rp.can_fetch(USER_AGENT, url)
 
-    def __call__(self, url: str) -> Response:
+    def _request(self, url: str, method: str) -> Response:
         host = urlsplit(url).netloc
         if host not in ROBOTS_EXEMPT and not self._allowed(url):
             raise NetError(f"robots.txt forbids {url}")
         self._pause(host)
-        return self._fetch(url)
+        return self._fetch(url, method)
+
+    def __call__(self, url: str) -> Response:
+        return self._request(url, "GET")
+
+    def head(self, url: str) -> Response:
+        return self._request(url, "HEAD")

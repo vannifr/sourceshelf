@@ -128,3 +128,15 @@ def test_redirect_to_other_host_drops_authorization(monkeypatch):
     assert "Authorization" not in {k.title() for k in new.headers} | {k.title() for k in new.unredirected_hdrs}
     same = net._CheckedRedirect().redirect_request(req, None, 302, "x", {}, "https://a.example/z")
     assert "Authorization" in {k.title() for k in same.headers}
+
+
+def test_head_uses_head_method_with_robots():
+    methods = []
+
+    def opener(req, timeout=0):
+        methods.append((req.get_method(), req.full_url))
+        return Resp(200 if req.full_url.endswith("/a") else 404, "text/plain", b"")
+
+    n = Net(opener=opener, sleep_fn=lambda s: None, clock=lambda: 0.0)
+    assert n.head("https://x.org/a").status == 200
+    assert methods == [("GET", "https://x.org/robots.txt"), ("HEAD", "https://x.org/a")]

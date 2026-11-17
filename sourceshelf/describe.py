@@ -120,6 +120,48 @@ def _error(fiche, meta: dict, message: str) -> Result:
     return Result(str(meta["id"]), False, message)
 
 
+MAX_WORDS = 180
+SUPPLIED_PROMPT = PROMPT_VERSION + " (subagent)"
+NL_WORDS = {"de", "het", "een", "en", "van", "dat", "niet", "met", "voor", "op", "is", "zijn", "die", "naar", "als"}
+EN_WORDS = {"the", "a", "of", "and", "that", "not", "with", "for", "on", "is", "are", "which", "to", "as", "in"}
+
+
+def check_summary(summary: str, source: str, lang: str) -> str | None:
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"(])", summary.strip()) if s]
+    if not 3 <= len(sentences) <= 5:
+        return f"summary has {len(sentences)} sentences, expected 3 to 5"
+    words = re.findall(r"[A-Za-z']+", summary.lower())
+    if len(summary.split()) > MAX_WORDS:
+        return f"summary has {len(summary.split())} words, maximum {MAX_WORDS}"
+    nl, en = sum(w in NL_WORDS for w in words), sum(w in EN_WORDS for w in words)
+    if (lang.lower().startswith("dutch") and en > nl) or (lang.lower().startswith("english") and nl > en):
+        return f"summary is not in {lang}"
+    flat = source.replace(",", ".")
+    missing = sorted({n for n in re.findall(r"\d+(?:[.,]\d+)?", summary) if n.replace(",", ".") not in flat})
+    if missing:
+        return "numbers not in source: " + ", ".join(missing)
+    return None
+
+
+def audit_summaries(root: Path, fiches) -> int:
+    lang = os.environ.get("KB_SUMMARY_LANG") or DEFAULT_LANG
+    checked = failed = 0
+    for f in fiches:
+        block = f.meta.get("machine-summary")
+        if not isinstance(block, dict) or str(f.meta.get("confidential", "")).lower() == "yes":
+            continue
+        path = data_path(root, f.meta.get("text"))
+        if path is None or not path.is_file():
+            continue
+        checked += 1
+        problem = check_summary(str(block.get("text", "")), path.read_text(encoding="utf-8", errors="ignore"), lang)
+        if problem:
+            failed += 1
+            print(f"{f.meta['id']}\t{block.get('prompt', '')}\t{block.get('model', '')}\t{problem}")
+    print(f"{checked} checked, {failed} failing")
+    return 0
+
+
 def describe(
     root: Path,
     fid: str,
@@ -129,6 +171,8 @@ def describe(
     again: bool = False,
     max_chars: int = MAX_CHARS,
     dry_run: bool = False,
+    prompt: str = PROMPT_VERSION,
+    gate: bool = False,
 ) -> Result:
     name = name or model_name()
     fiche = next((f for f in load_fiches(root / "fiches") if f.meta.get("id") == fid), None)
@@ -162,8 +206,12 @@ def describe(
         return _error(fiche, meta, "model returned no summary")
     if summary[-1] not in ".!?)":
         return _error(fiche, meta, "summary looks truncated (no sentence end)")
+    if gate:
+        problem = check_summary(summary, text[:max_chars], os.environ.get("KB_SUMMARY_LANG") or DEFAULT_LANG)
+        if problem:
+            return _error(fiche, meta, f"summary rejected: {problem}")
     meta.pop("error", None)
-    block = {"text": summary, "model": name, "prompt": PROMPT_VERSION, "date": date}
+    block = {"text": summary, "model": name, "prompt": prompt, "date": date}
     if truncated:
         block["truncated"] = "yes"
     meta["machine-summary"] = block

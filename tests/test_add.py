@@ -28,6 +28,7 @@ def test_arxiv_creates_fiche_with_sha_and_text(tmp_path, arxiv_xml, mini_pdf):
     assert m["authors"] == "Ada Voorbeeld, Bob Test"
     assert m["year"] == 2025 and m["doi"] == "10.1000/xyz123"
     assert m["kind"] == "preprint" and m["status"] == "new" and m["origin"] == "kb add"
+    assert m["quality"] == "preprint"
     assert m["fetched"] == "2026-10-20"
     assert m["sha256"] == sha(mini_pdf)
     assert "error" not in m

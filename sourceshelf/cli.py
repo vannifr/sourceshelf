@@ -6,7 +6,16 @@ from datetime import datetime
 from pathlib import Path
 
 from sourceshelf.add import UnknownType, add_local, add_source
-from sourceshelf.describe import ModelError, describe, model_name, openrouter_model
+from sourceshelf.describe import (
+    PROMPT_VERSION,
+    SUPPLIED_PROMPT,
+    ModelError,
+    audit_summaries,
+    describe,
+    model_name,
+    openrouter_model,
+    system_prompt,
+)
 from sourceshelf.extract import MissingTool
 from sourceshelf.fiche import FicheError, load_fiches, validate_dir
 from sourceshelf.index import index_drift, write_index
@@ -16,6 +25,7 @@ from sourceshelf.lock import Busy, write_lock
 from sourceshelf.net import VERSION, Net
 from sourceshelf.run import LOCKED, SourcesError, due, run
 from sourceshelf.search import resolve, search, search_exact
+from sourceshelf.update import PARTS, update
 from sourceshelf.web import serve
 
 try:
@@ -119,7 +129,12 @@ def make_model():
 
 
 def cmd_describe(root: Path, args) -> int:
+    if args.print_prompt:
+        print(system_prompt())
+        return 0
     fiches = load_fiches(root / "fiches")
+    if args.audit:
+        return audit_summaries(root, fiches)
     if args.all:
         ids = [str(f.meta["id"]) for f in fiches]
     elif args.id:
@@ -127,8 +142,18 @@ def cmd_describe(root: Path, args) -> int:
     else:
         print("give an id or --all")
         return 1
-    model, name = None, model_name()
-    if not args.dry_run:
+    model, name, prompt = None, model_name(), PROMPT_VERSION
+    if args.summary_file:
+        if args.all or not args.id or not args.model:
+            print("--summary-file needs one id and --model")
+            return 1
+        try:
+            supplied = args.summary_file.read_text(encoding="utf-8")
+        except (OSError, ValueError) as error:
+            print(f"describe failed: {error}")
+            return 1
+        model, name, prompt = (lambda system, text: supplied), args.model, SUPPLIED_PROMPT
+    elif not args.dry_run:
         try:
             model, name = make_model()
         except ModelError as error:
@@ -138,7 +163,7 @@ def cmd_describe(root: Path, args) -> int:
     done = errors = 0
     for fid in ids:
         try:
-            res = describe(root, fid, model, date, name, again=args.again, dry_run=args.dry_run)
+            res = describe(root, fid, model, date, name, again=args.again, dry_run=args.dry_run, prompt=prompt, gate=bool(args.summary_file))
         except Exception as error:  # noqa: BLE001
             errors += 1
             print(f"error for {fid}: {type(error).__name__}: {error}")
@@ -151,6 +176,8 @@ def cmd_describe(root: Path, args) -> int:
             print(f"described: {fid}")
         elif args.dry_run or not args.all:
             print(f"{fid}: {res.reason}")
+            if args.summary_file:
+                errors += 1
     if done:
         cmd_index(root)
     print(f"{done} described, {errors} error(s)")
@@ -187,6 +214,10 @@ def duplicate_warnings(root: Path) -> list[str]:
     return [f"warning: same title '{t}' in multiple fiches: {', '.join(i)}" for t, i in sorted(by_title.items()) if len(i) > 1]
 
 
+def no_quality(root: Path) -> list[str]:
+    return [str(f.meta["id"]) for f in load_fiches(root / "fiches") if f.meta.get("quality") in (None, "")]
+
+
 def unverified(root: Path) -> list[str]:
     out = []
     for f in load_fiches(root / "fiches"):
@@ -205,6 +236,9 @@ def cmd_check(root: Path, data: Path | None = None, list_unverified: bool = Fals
     if not errors:
         for w in doi_warnings(root) + duplicate_warnings(root):
             print(w)
+        missing = no_quality(root)
+        if missing:
+            print(f"warning: {len(missing)} fiches without `quality:` ({', '.join(missing[:5])}{', ...' if len(missing) > 5 else ''})")
         ids = unverified(root)
         if ids:
             print(f"warning: {len(ids)} machine summaries without `verified: yes` (sourceshelf check --unverified lists the ids)")
@@ -281,8 +315,31 @@ def cmd_run(root: Path, source: str | None) -> int:
     return 0
 
 
+def cmd_update(root: Path, only: str | None, dry_run: bool) -> int:
+    try:
+        res = update(root, make_net(), datetime.now().astimezone(), only=only, dry_run=dry_run)
+    except FicheError as error:
+        print(error)
+        return 1
+    for series, url, previous in res.candidates:
+        print(f"edition candidate ({series}): {url} supersedes {previous}")
+    for fid, previous in res.editions:
+        print(f"new edition: {fid} supersedes {previous}")
+    for fid, doi in res.dois:
+        print(f"published: {fid} doi {doi}")
+    for fid, reason in res.failing:
+        print(f"link failing: {fid} ({reason})")
+    for fid, reason in res.removed:
+        print(f"link removed: {fid} ({reason})")
+    if res.skipped:
+        print(f"{len(res.skipped)} item(s) left for the next run (cap)")
+    for error in res.errors:
+        print(f"error: {error}")
+    return res.code
+
+
 WRITING = ("add", "describe", "index")
-NEEDS_LIBRARY = ("check", "index", "get", "describe", "due", "search", "resolve", "serve")
+NEEDS_LIBRARY = ("check", "index", "get", "describe", "due", "update", "search", "resolve", "serve")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -308,6 +365,13 @@ def main(argv: list[str] | None = None) -> int:
     de.add_argument("--all", action="store_true")
     de.add_argument("--again", action="store_true")
     de.add_argument("--dry-run", action="store_true")
+    de.add_argument("--summary-file", type=Path, help="store a summary written elsewhere (e.g. by a Claude subagent); needs id and --model")
+    de.add_argument("--audit", action="store_true", help="run the summary gate over existing summaries (no model)")
+    de.add_argument("--print-prompt", action="store_true", help="print the fixed summary prompt for a subagent")
+    de.add_argument("--model", help="model name recorded with --summary-file")
+    up = sub.add_parser("update", help="update existing sources: new editions, preprint DOIs, dead links")
+    up.add_argument("--dry-run", action="store_true")
+    up.add_argument("--only", choices=PARTS)
     sub.add_parser("due", help="list sources that are due for a fetch")
     sub.add_parser("run", help="fetch due sources, index and write the digest").add_argument("source", nargs="?")
     sr = sub.add_parser("search", help="BM25 search (exit 1 when nothing is found)")
@@ -328,7 +392,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd in NEEDS_LIBRARY and not args.root.is_dir():
         print(f"library folder not found: {args.root}; use --root or KB_ROOT", file=sys.stderr)
         return 2
-    writes = args.cmd in WRITING and not (args.cmd == "describe" and args.dry_run)
+    writes = args.cmd in WRITING and not (
+        args.cmd == "describe" and (args.dry_run or args.print_prompt or args.audit)
+    )
     if private_cmds and private_cmds.writes(args):
         writes = True
     try:
@@ -359,6 +425,8 @@ def _execute(args) -> int:
         return cmd_due(args.root)
     if args.cmd == "run":
         return cmd_run(args.root, args.source)
+    if args.cmd == "update":
+        return cmd_update(args.root, args.only, args.dry_run)
     if args.cmd == "search":
         return cmd_search(args.root, args)
     if args.cmd == "resolve":

@@ -6,6 +6,7 @@ import yaml
 
 STATUSES = ("new", "seen", "ignored", "used", "removed")
 KINDS = ("peer-reviewed", "preprint", "report", "news", "blog", "standard", "other")
+QUALITIES = ("peer-reviewed", "preprint", "official", "vendor", "blog", "own-observation", "unverified", "unknown")
 YESNO = ("confidential", "open-access", "text-layer")
 REQUIRED = ("id", "title", "status", "origin")
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
@@ -80,6 +81,8 @@ def validate(fiche: Fiche) -> list[str]:
         errors.append(f"{name}: invalid status {m['status']!r}")
     if m.get("kind") not in (None, "") and m["kind"] not in KINDS:
         errors.append(f"{name}: invalid kind {m['kind']!r}")
+    if m.get("quality") not in (None, "") and m["quality"] not in QUALITIES:
+        errors.append(f"{name}: invalid quality {m['quality']!r}")
     if m.get("confidential") not in (None, "", "yes", "no", "true", "false"):
         errors.append(f"{name}: confidential must be yes or no, got {m['confidential']!r}")
     sha = m.get("sha256")

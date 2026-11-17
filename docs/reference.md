@@ -15,7 +15,7 @@
 
 ## Fiche format
 
-Frontmatter keys: `id` (lowercase, `[a-z0-9._-]`), `title`, `status` (`new|seen|ignored|used|removed`), `origin` are required. Optional: `kind` (`peer-reviewed|preprint|report|news|blog|standard|other`), `url`, `doi`, `authors`, `year`, `date`, `fetched`, `file`, `text` (path under `data/`), `sha256` (of `file`), `text-layer` (`yes|no`), `open-access`, `confidential` (`yes|no`), `no-text` (reason; no text exists), `error` (last failure), `e-ids`, `source-file`, `machine-summary` (`text`, `model`, `prompt`, `date`, `truncated`, `verified`), `verification`.
+Frontmatter keys: `id` (lowercase, `[a-z0-9._-]`), `title`, `status` (`new|seen|ignored|used|removed`), `origin` are required. Optional: `kind` (`peer-reviewed|preprint|report|news|blog|standard|other`), `url`, `doi`, `authors`, `year`, `date`, `fetched`, `file`, `text` (path under `data/`), `sha256` (of `file`), `text-layer` (`yes|no`), `quality` (`peer-reviewed|preprint|official|vendor|blog|own-observation|unverified|unknown`; derived from `kind` when absent, an invalid value is an error, a missing one a warning), `supersedes` (id of the edition replaced), `open-access`, `confidential` (`yes|no`), `no-text` (reason; no text exists), `error` (last failure), `e-ids`, `source-file`, `machine-summary` (`text`, `model`, `prompt`, `date`, `truncated`, `verified`), `verification`.
 
 Rules: machine output is marked (`machine:` block, `machine-summary`); a failed fetch has `status: new` and an `error:` line; `text:` and `file:` must stay inside `data/` (other paths are ignored). The Dutch key and value names of older libraries are still read.
 
@@ -34,15 +34,29 @@ sources:
     kind: url-list           # urls: required for url-list and feed
     urls: [https://example.org/]
     cadence_days: 30
+    quality: official        # optional, for the items of this source
+discovery:                   # optional, enables the OpenAlex step of `sourceshelf run`
+  cadence_days: 30
+  topics: [software testing] # max 8
+  counter_terms: []
+  max_calls: 40
 ```
+
+`discovery:` produces candidates under "Exploration" and "Suggested sources" in the digest. They are proposals only: nothing is added to `sources.yaml` or as a fiche. No e-mail address is sent; an optional `OPENALEX_API_KEY` is read from the environment and never logged; a 429 stops the step with one message.
 
 ## Commands and exit codes
 
 `0` success; `1` failure or nothing found (an empty search prints `no results` on stderr); `2` library folder not found. `sourceshelf check` exits 1 on any error; warnings do not fail it. A second writer (`add`, `describe`, `index`, `run`) exits 1 with "busy".
 
-`sourceshelf search <query> [--limit N] [--fields] [--kind own|external] [--json]`, `sourceshelf search --exact <text>` (literal, needs `rg`), `sourceshelf get <id>`, `sourceshelf resolve <key>`, `sourceshelf due`, `sourceshelf run [source]`, `sourceshelf add <url|path> | --from <manifest>`, `sourceshelf inventory <dir>`, `sourceshelf describe <id>|--all`, `sourceshelf serve [--port]`. `sourceshelf <command> --help` lists the options.
+`sourceshelf search <query> [--limit N] [--fields] [--kind own|external] [--json]`, `sourceshelf search --exact <text>` (literal, needs `rg`), `sourceshelf get <id>`, `sourceshelf resolve <key>`, `sourceshelf due`, `sourceshelf run [source]`, `sourceshelf add <url|path> | --from <manifest>`, `sourceshelf inventory <dir>`, `sourceshelf describe <id>|--all [--again] [--dry-run]`, `sourceshelf update [--dry-run] [--only edition|preprint|links]`, `sourceshelf serve [--port]`. `sourceshelf <command> --help` lists the options.
 
 `sourceshelf search --json` prints a list of `{id, title, score, path, page, line, snippet}`; no hit prints `[]` with exit 1.
+
+`sourceshelf update` (takes the writer lock, skips `confidential: yes`): new editions (a `series:`/`landing:` entry in `sources.yaml`) become a fiche with `supersedes:`; OpenAlex adds `doi:` and `quality: peer-reviewed` for published preprints (machine line, at most 40 calls); the link check sets `status: removed` after two failures in a row (the local copy stays). 401, 403, 429, robots.txt and refused non-public addresses are inconclusive. If more than half of at least 5 probes fail with a network error, nothing is marked removed and one error message is added.
+
+`sourceshelf describe <id> --summary-file <file> --model <name>` stores a summary written elsewhere; `describe --print-prompt` shows the fixed prompt and `describe --audit` re-checks stored summaries (no model). A summary outside 3-5 sentences, over 180 words, in the wrong language (`KB_SUMMARY_LANG`) or with a number not in the source is rejected. `sourceshelf check` counts summaries without `verified: yes`; `sourceshelf check --unverified` lists them.
+
+The digest of `sourceshelf run` includes a spread report: share per quality, domain, language and type of the fiches fetched in the last 30 days, with a warning above 40 % for one domain or a type at 0.
 
 ## Web API (`sourceshelf serve`, GET only, 127.0.0.1)
 

@@ -3,12 +3,13 @@ import json
 import subprocess
 from datetime import UTC, datetime, timedelta
 
+import pytest
 import yaml
 
 from sourceshelf import cli
 from sourceshelf.fiche import load_fiches
 from sourceshelf.net import NetError, Response
-from sourceshelf.run import due, load_sources, run
+from sourceshelf.run import SourcesError, due, load_sources, run
 from tests.conftest import FakeNet
 
 NOW = datetime(2026, 10, 20, 7, 20, tzinfo=UTC)
@@ -319,3 +320,16 @@ def test_feed_http_error_is_source_failure(tmp_path):
     feed_repo(tmp_path)
     r = run(tmp_path, FakeNet({"https://news.example/feed.xml": Response(503, "", b"")}), NOW)
     assert r.failed_sources == ["news"]
+
+
+def test_source_quality_reaches_fiche(tmp_path, mini_pdf, arxiv_xml):
+    make_repo(tmp_path, [{"id": "arxiv-agentic", "kind": "arxiv-query", "query": "agentic", "max": 10,
+                          "cadence_days": 14, "quality": "peer-reviewed"}])
+    run(tmp_path, ArxivNet(["2501.00001"], mini_pdf, arxiv_xml), NOW)
+    assert load_fiches(tmp_path / "fiches")[0].meta["quality"] == "peer-reviewed"
+
+
+def test_invalid_source_quality_is_refused(tmp_path):
+    make_repo(tmp_path, [{"id": "a", "kind": "arxiv-query", "query": "x", "cadence_days": 14, "quality": "good"}])
+    with pytest.raises(SourcesError, match="invalid quality"):
+        load_sources(tmp_path)

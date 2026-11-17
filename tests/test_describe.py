@@ -289,3 +289,109 @@ def test_local_http_endpoint_end_to_end(monkeypatch):
         server.shutdown()
         server.server_close()
     assert seen["model"] == "llama3"
+
+
+GOOD = (
+    "Het rapport beschrijft drie experimenten met de teams. Het meet 12 procent winst voor de testers. "
+    "De auteurs trekken geen conclusie over de oorzaak van het verschil."
+)
+
+
+def _store(tmp_path, summary, monkeypatch, lang="Dutch", source="inhoud met 3 en 12 procent"):
+    monkeypatch.setenv("KB_SUMMARY_LANG", lang)
+    make_fiche(tmp_path, text=source)
+    f = tmp_path / "s.txt"
+    f.write_text(summary, encoding="utf-8")
+    return cli.main(["--root", str(tmp_path), "describe", "e1", "--summary-file", str(f), "--model", "claude-opus-5-5 (subagent)"])
+
+
+def test_summary_file_is_stored_with_same_rules(tmp_path, monkeypatch):
+    assert _store(tmp_path, "Hier is een samenvatting van het rapport:\n\n# Samenvatting\n\n" + GOOD + "\n\nLaat me weten als je meer detail wilt.", monkeypatch) == 0
+    m = load_fiche(tmp_path / "fiches" / "e1.md").meta["machine-summary"]
+    assert m["text"].startswith("Het rapport beschrijft") and m["model"] == "claude-opus-5-5 (subagent)"
+    assert "Hier is" not in m["text"] and m["prompt"] == "s21-b (subagent)"
+
+
+def test_summary_file_gate_rejects_bad_summaries(tmp_path, monkeypatch, capsys):
+    cases = {
+        "sentences": ("Een zin met de teams. Nog een zin met 12 procent.", "sentences"),
+        "words": (" ".join(["De teams van het rapport meten 12 procent winst."] * 4 + ["woord " * 180 + "."]), "words"),
+        "english": ("The report describes three experiments with the teams. It measures 12 percent gain for the testers. The authors draw no conclusion.", "not in Dutch"),
+        "number": (GOOD.replace("12", "14"), "numbers not in source: 14"),
+    }
+    for key, (summary, expect) in cases.items():
+        root = tmp_path / key
+        root.mkdir()
+        assert _store(root, summary, monkeypatch) == 1
+        assert expect in capsys.readouterr().out
+        assert "machine-summary" not in load_fiche(root / "fiches" / "e1.md").meta
+
+
+def test_print_prompt(capsys, monkeypatch, tmp_path):
+    monkeypatch.setenv("KB_SUMMARY_LANG", "Dutch")
+    assert cli.main(["--root", str(tmp_path), "describe", "--print-prompt"]) == 0
+    assert "3 to 5 sentences in Dutch" in capsys.readouterr().out
+    assert not (tmp_path / "data").exists()
+
+
+def test_audit_takes_no_lock(capsys, tmp_path):
+    make_fiche(tmp_path)
+    cli.main(["--root", str(tmp_path), "describe", "--audit"])
+    assert not (tmp_path / "data" / "run.lock").exists()
+
+
+def test_summary_file_not_utf8_is_clean_error(tmp_path, capsys):
+    make_fiche(tmp_path)
+    f = tmp_path / "s.txt"
+    f.write_bytes(b"\xff\xfe\x00bad")
+    assert cli.main(["--root", str(tmp_path), "describe", "e1", "--summary-file", str(f), "--model", "m"]) == 1
+    assert "describe failed" in capsys.readouterr().out
+
+
+def test_dry_run_reports_confidential_before_any_subagent(tmp_path, capsys):
+    make_fiche(tmp_path, extra="confidential: yes\n")
+    assert cli.main(["--root", str(tmp_path), "describe", "e1", "--dry-run"]) == 0
+    assert "confidential" in capsys.readouterr().out
+
+
+def test_summary_file_refused_for_confidential(tmp_path):
+    make_fiche(tmp_path, extra="confidential: yes\n")
+    f = tmp_path / "s.txt"
+    f.write_text("Een zin.", encoding="utf-8")
+    assert cli.main(["--root", str(tmp_path), "describe", "e1", "--summary-file", str(f), "--model", "m"]) == 1
+    assert "machine-summary" not in load_fiche(tmp_path / "fiches" / "e1.md").meta
+
+
+def test_summary_file_empty_or_truncated_is_error(tmp_path):
+    make_fiche(tmp_path)
+    f = tmp_path / "s.txt"
+    for body in ("", "Een afgekapte zin zonder einde"):
+        f.write_text(body, encoding="utf-8")
+        assert cli.main(["--root", str(tmp_path), "describe", "e1", "--summary-file", str(f), "--model", "m"]) == 1
+    meta = load_fiche(tmp_path / "fiches" / "e1.md").meta
+    assert "machine-summary" not in meta and meta["error"].startswith("summary:")
+
+
+def test_summary_file_needs_id_model_and_readable_file(tmp_path):
+    make_fiche(tmp_path)
+    f = tmp_path / "s.txt"
+    f.write_text("Een zin.", encoding="utf-8")
+    base = ["--root", str(tmp_path), "describe"]
+    assert cli.main(base + ["--all", "--summary-file", str(f), "--model", "m"]) == 1
+    assert cli.main(base + ["e1", "--summary-file", str(f)]) == 1
+    assert cli.main(base + ["e1", "--summary-file", str(tmp_path / "nope"), "--model", "m"]) == 1
+
+
+def test_audit_lists_failing_summaries(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("KB_SUMMARY_LANG", "Dutch")
+    make_fiche(tmp_path, text="inhoud met 3 en 12 procent")
+    f = tmp_path / "s.txt"
+    f.write_text(GOOD, encoding="utf-8")
+    assert cli.main(["--root", str(tmp_path), "describe", "e1", "--summary-file", str(f), "--model", "m"]) == 0
+    capsys.readouterr()
+    assert cli.main(["--root", str(tmp_path), "describe", "--audit"]) == 0
+    assert "1 checked, 0 failing" in capsys.readouterr().out
+    (tmp_path / "data" / "text" / "e1.txt").write_text("andere inhoud", encoding="utf-8")
+    cli.main(["--root", str(tmp_path), "describe", "--audit"])
+    out = capsys.readouterr().out
+    assert "e1\t" in out and "numbers not in source" in out and "1 checked, 1 failing" in out
