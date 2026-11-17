@@ -222,7 +222,7 @@ def update_preprints(root: Path, net, now: datetime, dry_run: bool, result: Upda
         result.dois.append((fid, doi))
         if dry_run:
             continue
-        note = f"  published-version: doi {doi} found by sourceshelf update on {date} via OpenAlex ({work}); quality set to peer-reviewed"
+        note = f"  published-version: doi {doi} found by sourceshelf update on {date} via OpenAlex ({work}); quality changed to peer-reviewed"
         meta = {**fiche.meta, "doi": doi, "quality": "peer-reviewed"}
         write_fiche(fiche.path, meta, _machine_note(fiche.text, note))
     if not dry_run:
